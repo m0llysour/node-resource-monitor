@@ -1,0 +1,251 @@
+<html>
+	<head>
+		<style type="text/css">
+			html { height: 100%; }
+			body {
+				height: 100%;
+				background-color: #fff;
+				font: 13px/20px normal Helvetica, Arial, sans-serif;
+				color: #4F5155;
+			}
+	
+			a {
+				color: #003399;
+				background-color: transparent;
+				font-weight: normal;
+			}
+			
+			pre {
+				background-color: #F8F8F8;
+				border: 1px solid #CCC;
+				font-size: 13px;
+				line-height: 19px;
+				padding: 3px 30px;
+				border-radius: 3px;
+				width: 1150px;
+				margin-top: 0px;
+			}
+			
+			span {
+				font-weight: bold;
+			}
+		</style>
+	
+		<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js" type="text/javascript"></script>
+		<script src="http://code.highcharts.com/highcharts.js"></script>
+		<script src="http://code.highcharts.com/modules/exporting.js"></script>
+		<script>		
+			$(function () {
+			    $(document).ready(function() {
+			    
+			        Highcharts.setOptions({
+			            global: {
+			                useUTC: false
+			            }
+			        });
+			    
+			        var chart;
+			        var lastTs;
+			        
+			        $.ajax({
+					  url: "/livedata",
+					  context: document.body
+					}).done(function(data) { 
+					  var dataSet = [];
+					  var dataSet_memoryRss = [];
+					  var dataSet_memoryHeapTotal = [];
+					  var dataSet_memoryHeapUsed = [];
+					  var dataSet_processor = [];
+					  var dataSet_memoryTotal = [];
+					  var dataSet_memoryNode = [];
+					  var dataSet_time = [];
+					  var dataSet_redisStore = [];
+					
+					  data = JSON.parse(data);
+					  console.log(data);
+					  
+					  for(i=(data.length-1) ; i > -1  ; i--) {
+					  	x = (new Date(parseInt(data[i][1]) * 1000)).getTime();
+					  	val = JSON.parse(data[i][0].replace(/,/g,',"').replace(/:/g,'":').replace(/{/g,'{"'));
+					  	
+                        //memRss memHeapTotal memHeapUsed
+                        y = parseInt(val.memRss);
+                        dataSet_memoryRss.push({
+                            x: x,
+                            y: y
+                        });
+                        y = parseInt(val.memHeapTotal);
+                        dataSet_memoryHeapTotal.push({
+                            x: x,
+                            y: y
+                        });
+                        y = parseInt(val.memHeapUsed);
+                        dataSet_memoryHeapUsed.push({
+                            x: x,
+                            y: y
+                        });
+                        
+                        y = parseInt(val.processor);
+                        dataSet_processor.push({
+                            x: x,
+                            y: y
+                        });
+                        
+                        y = parseInt(val.memory);
+                        dataSet_memoryTotal.push({
+                            x: x,
+                            y: y
+                        });
+                        y = parseInt(val.memoryNode);
+                        dataSet_memoryNode.push({
+                            x: x,
+                            y: y
+                        });
+                        
+                        lastTs = val.ts;
+					  }
+					  
+					  // object def
+					  chart = new Highcharts.Chart({
+				            chart: {
+				                renderTo: 'container_memory',
+				                type: 'spline',
+				                marginRight: 10,
+				                events: {
+				                    load: function() {
+				    
+				                        // set up the updating of the chart each second
+				                        var series = this.series[0];
+				                        var series1 = this.series[1];
+				                        
+				                        setInterval(function() {
+											$.ajax({
+											  url: "/livedata",
+											  context: document.body
+											}).done(function(data) { 
+											  var dataSet = [];
+											  maxLength = 80;
+											
+											  data = JSON.parse(data);
+											  
+											  for(i=(data.length-1) ; i > -1  ; i--) {
+											  	  if(parseInt(data[i][1]) > lastTs) {
+													  x = (new Date(parseInt(data[i][1]) * 1000)).getTime();
+													  val = JSON.parse(data[i][0].replace(/,/g,',"').replace(/:/g,'":').replace(/{/g,'{"'));
+													  														  
+													  y = parseInt(val.memRss);
+													  shift = chart_memory.series[0].data.length > maxLength;
+													  chart_memory.series[0].addPoint([x, y], true, shift);
+													  y = parseInt(val.memHeapTotal);
+													  shift = chart_memory.series[1].data.length > maxLength;
+													  chart_memory.series[1].addPoint([x, y], true, shift);
+													  y = parseInt(val.memHeapUsed);
+													  shift = chart_memory.series[2].data.length > maxLength;
+													  chart_memory.series[2].addPoint([x, y], true, shift);
+													  
+													  y = parseInt(val.processor);
+													  shift = chart_processor.series[0].data.length > maxLength;
+													  chart_processor.series[0].addPoint([x, y], true, shift);
+													  
+													  y = parseInt(val.memory);
+													  shift = chart_memoryT.series[0].data.length > maxLength;
+													  chart_memoryT.series[0].addPoint([x, y], true, shift);
+													  y = parseInt(val.memoryNode);
+													  shift = chart_memoryT.series[1].data.length > maxLength;
+													  chart_memoryT.series[1].addPoint([x, y], true, shift);
+													  
+													  lastTs = parseInt(data[i][1]);
+											    }
+											  }
+											});
+
+										}, 3500);
+				                    }
+				                }
+				            },
+				            title: {text: 'Memory (app)'},
+				            xAxis: {type: 'datetime',tickPixelInterval: 150},
+				            yAxis: {title: {text: 'Bytes'},
+				            	plotLines: [{value: 0,width: 1,color: '#808080'},
+				            	{value: 1,width: 1,color: '#A0A0A0'}]
+				            },
+				            tooltip: {formatter: function() {
+				                        return '<b>'+ this.series.name +'</b><br/>'+
+				                        Highcharts.dateFormat('%Y-%m-%d %H:%M:%S', this.x) +'<br/>'+
+				                        Highcharts.numberFormat(this.y, 2);}},
+				            legend: {enabled: true},
+				            exporting: {enabled: false},
+				            series: [{name: 'RSS',data: dataSet_memoryRss}, {name: 'Heap Total',data: dataSet_memoryHeapTotal},{name: 'Heap Used',data: dataSet_memoryHeapUsed}],
+				            plotOptions: {
+					            series: { marker: { enabled: false, states: { hover: { enabled: true } } } }
+					        }
+				        });
+					  // end object def
+					  					  
+					  // object def
+					  var chart_memoryT = new Highcharts.Chart({
+				            chart: {
+				                renderTo: 'container_memoryT',
+				                type: 'spline',
+				                marginRight: 10
+				            },
+				            title: {text: 'Memory (total)'},
+				            xAxis: {type: 'datetime',tickPixelInterval: 150},
+				            yAxis: {title: {text: 'Percent'},
+				            	plotLines: [{value: 0,width: 1,color: '#808080'},
+				            	{value: 1,width: 1,color: '#A0A0A0'}]
+				            },
+				            tooltip: {formatter: function() {
+				                        return '<b>'+ this.series.name +'</b><br/>'+
+				                        Highcharts.dateFormat('%Y-%m-%d %H:%M:%S', this.x) +'<br/>'+
+				                        Highcharts.numberFormat(this.y, 2);}},
+				            legend: {enabled: true},
+				            exporting: {enabled: false},
+				            series: [{name: 'Total',data: dataSet_memoryTotal}, {name: 'NodeJS',data: dataSet_memoryNode}],
+				            plotOptions: {
+					            series: { marker: { enabled: false, states: { hover: { enabled: true } } } }
+					        }
+				        });
+					  // end object def
+					  
+					  // object def
+					  var chart_processor = new Highcharts.Chart({
+				            chart: {
+				                renderTo: 'container_processor',
+				                type: 'spline',
+				                marginRight: 10
+				            },
+				            title: {text: 'Processor (global)'},
+				            xAxis: {type: 'datetime',tickPixelInterval: 150},
+				            yAxis: {title: {text: 'Percent'},
+				            	plotLines: [{value: 0,width: 1,color: '#808080'},
+				            	{value: 1,width: 1,color: '#A0A0A0'}]
+				            },
+				            tooltip: {formatter: function() {
+				                        return '<b>'+ this.series.name +'</b><br/>'+
+				                        Highcharts.dateFormat('%Y-%m-%d %H:%M:%S', this.x) +'<br/>'+
+				                        Highcharts.numberFormat(this.y, 2);}},
+				            legend: {enabled: false},
+				            exporting: {enabled: false},
+				            series: [{name: 'Processor',data: dataSet_processor}],
+				            plotOptions: {
+					            series: { marker: { enabled: false, states: { hover: { enabled: true } } } }
+					        }
+				        });
+					  // end object def
+					  					  
+					});
+			    });
+			    
+			});
+		</script>
+	</head>
+	<body>
+		<div id="container_memory" style="width: 1200px; height: 250px;"></div>
+		<hr/>
+		<div id="container_memoryT" style="width: 1200px; height: 250px;"></div>
+		<hr/>
+		<div id="container_processor" style="width: 1200px; height: 250px;"></div>
+		<!-- -->
+	</body>
+</html>
